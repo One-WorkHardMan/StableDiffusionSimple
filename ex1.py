@@ -421,8 +421,8 @@ class UNet(nn.Module):
             # Stage4
 
             nn.Sequential(
-                # 这里包括上面AE部分的上采样，这几个参数都非常抽象，220 没有办法 还原成两倍的Input尺寸，需要时331：Output = Input * Stride；
-                nn.ConvTranspose2d(2*8 * ch, 8 * ch, kernel_size=2, stride=2, padding=0),
+                # 这里包括上面AE部分的上采样，这几个参数都非常抽象，220 还原成两倍的Input尺寸；
+                nn.Conv2d(16*ch,8*ch,kernel_size=3,stride=1,padding=1),
                 ResBlock(8 * ch),
                 ResBlock(8 * ch),
                 nn.ConvTranspose2d(8 * ch, 4 * ch, kernel_size=2, stride=2, padding=0),
@@ -430,7 +430,7 @@ class UNet(nn.Module):
 
 
             nn.Sequential(
-                nn.ConvTranspose2d(8 * ch, 4 * ch, kernel_size=2, stride=2, padding=0),
+                nn.Conv2d(8 * ch, 4* ch, kernel_size=3, stride=1, padding=1),
                 ResBlock(4 * ch),
                 ResBlock(4 * ch),
                 nn.ConvTranspose2d(4* ch, 2 * ch, kernel_size=2, stride=2, padding=0),
@@ -438,7 +438,8 @@ class UNet(nn.Module):
 
 
             nn.Sequential(
-                nn.ConvTranspose2d(4 * ch, 2 * ch, kernel_size=2, stride=2, padding=0),
+                # nn.ConvTranspose2d(4 * ch, 2 * ch, kernel_size=2, stride=2, padding=0),
+                nn.Conv2d(8 * ch, 4 * ch, kernel_size=3, stride=1, padding=1),
                 ResBlock(2 * ch),
                 ResBlock(2 * ch),
                 nn.ConvTranspose2d(2 * ch, 1 * ch, kernel_size=2, stride=2, padding=0),
@@ -480,7 +481,7 @@ class TwoWaysModule(object):
 
 class TwoWaysSequential(nn.Module):
     def __init__(self,*modules):
-        super(TwoWaysSequential, self).__init__()
+        super().__init__()
 
         # 只有通过ModuleList 也就是继承了 nn.Mudule 的才能保存权重，如果直接 self.module_list = mudules 是不行的；
         self.module_list = nn.ModuleList(modules)
@@ -509,6 +510,7 @@ class CrossAttentionBlock(nn.Module,TwoWaysModule):
 
         self.layer_norm = nn.GroupNorm(1,num_channels) # 分组为1 就是 ln
 
+        #定义多头注意力：
         self.attention = nn.MultiheadAttention(
             embed_dim=num_channels,
             kdim=condition_channels,
@@ -588,53 +590,54 @@ class Attention_UNet_with_Condition(nn.Module):
         ])
 
         #unet的中间层
-        self.middle = TwoWaysSequential(
-            nn.Conv2d(8*ch,32*ch,kernel_size=2,stride=2,padding=0),
+        self.middle = nn.ModuleList([
 
-            ResBlock(32*ch),
-            CrossAttentionBlock(32 * ch, condition_channels),
-            ResBlock(32*ch),
-            CrossAttentionBlock(32 * ch, condition_channels),
-            nn.ConvTranspose2d(32*ch,8*ch,kernel_size=2,stride=2,padding=0),
+            TwoWaysSequential(
 
-
-        ) ,
+                nn.Conv2d(8 * ch, 32 * ch, kernel_size=2, stride=2, padding=0),
+                ResBlock(32 * ch),
+                CrossAttentionBlock(32 * ch, condition_channels),
+                ResBlock(32 * ch),
+                CrossAttentionBlock(32 * ch, condition_channels),
+                nn.ConvTranspose2d(32 * ch, 8 * ch, kernel_size=2, stride=2),
+            )
+        ])
 
         self.Decoder = nn.ModuleList([
             # Stage4,和上面一样，第四阶段没有计算注意力。
 
             TwoWaysSequential(
-                # 这里包括上面AE部分的上采样，这几个参数都非常抽象，220 没有办法 还原成两倍的Input尺寸，需要时331：Output = Input * Stride；
-                nn.ConvTranspose2d(2*8 * ch, 8 * ch, kernel_size=2, stride=2, padding=0),
+                # 这里包括上面AE部分的上采样，这几个参数都非常抽象，220 还原成两倍的Input尺寸;
+                nn.Conv2d(16 * ch, 8 * ch, kernel_size=3, stride=1, padding=1),
                 ResBlock(8 * ch),
+                ResBlock(8 * ch),
+                nn.ConvTranspose2d(8 * ch, 4 * ch, kernel_size=2, stride=2),
 
-                ResBlock(8 * ch),
-                nn.ConvTranspose2d(8 * ch, 4 * ch, kernel_size=2, stride=2, padding=0),
             ),
 
 
             TwoWaysSequential(
-                nn.ConvTranspose2d(8 * ch, 4 * ch, kernel_size=2, stride=2, padding=0),
+                nn.Conv2d(8 * ch, 4 * ch, kernel_size=3, stride=1, padding=1),
                 ResBlock(4 * ch),
                 CrossAttentionBlock(4 * ch, condition_channels),
                 ResBlock(4 * ch),
                 CrossAttentionBlock(4 * ch, condition_channels),
-                nn.ConvTranspose2d(4* ch, 2 * ch, kernel_size=2, stride=2, padding=0),
+                nn.ConvTranspose2d(4* ch, 2 * ch, kernel_size=2, stride=2),
             ),
 
 
             TwoWaysSequential(
-                nn.ConvTranspose2d(4 * ch, 2 * ch, kernel_size=2, stride=2, padding=0),
+                nn.Conv2d(4 * ch, 2 * ch, kernel_size=3, stride=1, padding=1),
                 ResBlock(2 * ch),
                 CrossAttentionBlock(2 * ch, condition_channels),
                 ResBlock(2 * ch),
                 CrossAttentionBlock(2 * ch, condition_channels),
-                nn.ConvTranspose2d(2 * ch, 1 * ch, kernel_size=2, stride=2, padding=0),
+                nn.ConvTranspose2d(2 * ch, 1 * ch, kernel_size=2, stride=2),
             ),
 
 
             TwoWaysSequential(
-                nn.ConvTranspose2d(2 * ch, 1 * ch, kernel_size=2, stride=2, padding=0),
+                nn.Conv2d(2 * ch, 1 * ch, kernel_size=3, stride=1, padding=1),
                 ResBlock(1 * ch),
                 CrossAttentionBlock(1 * ch, condition_channels),
                 ResBlock(1 * ch),
@@ -643,7 +646,7 @@ class Attention_UNet_with_Condition(nn.Module):
             )
 
 
-        ]),
+        ])
 
         self.conv_out = nn.Conv2d(1*ch,num_channels,kernel_size=3,stride=1,padding=1)
 
@@ -655,11 +658,14 @@ class Attention_UNet_with_Condition(nn.Module):
             #将每一层的输出保存下来，倒序保存下来
             shotcuts.insert(0,h)
 
-        h = self.middle(h,conditions)
+        for m in self.middle:
+            h = m(h,conditions)
 
         for m,r in zip(self.Decoder,shotcuts):
+
             h = torch.cat([r,h],dim = 1)
-            h = m(h,conditions)
+            h = m(h, conditions)
+
         h = self.conv_out(h)
         return h
 
@@ -668,6 +674,13 @@ class Attention_UNet_with_Condition(nn.Module):
 def _test():
     xx = torch.rand([4,17,128,128])
     conditions = torch.rand([4,1,128])
+    net = Attention_UNet_with_Condition(num_channels=17,condition_channels=128)
+    yy = net(xx,conditions)
+    print(yy.shape)
+
+
+if __name__ == '__main__':
+    _test()
 
 
 
