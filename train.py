@@ -5,6 +5,7 @@ from torch.optim import AdamW
 import torch.utils.data as tud
 import torch.nn.functional as func
 from diffusers.schedulers import DDPMScheduler
+from diffusers.models.embeddings import get_timestep_embedding
 import ex1
 
 class FakeDataset(tud.Dataset):
@@ -22,6 +23,19 @@ class FakeDataset(tud.Dataset):
         xx = torch.rand(self.src_shape,dtype=torch.float32)
         yy = torch.rand(self.dst_shape,dtype=torch.float32)
         return xx,yy
+
+# 在DDPM或者IDDPM中我们加入条件没有使用CrossAttention，我们时间步数的生成都是直接加入数据里面，但是这里要计算交叉注意力分数所以得转换成才能NLC的形式；
+def make_conditions(timesteps:torch.Tensor,images:torch.Tensor = None,embedding_dim = 128)->torch.Tensor:
+    assert timesteps.ndim == 1
+
+    timesteps_enbedding = get_timestep_embedding(timesteps,embedding_dim,max_period=10000) # [N C]
+    timesteps_enbedding = timesteps_enbedding[:,None,:] #[N1C]
+
+    if images is not None:
+
+
+
+
 
 
 
@@ -67,6 +81,19 @@ def train_diffusion():
 
         optimozer.zero_grad()
         with torch.no_grad():
+            src_latent = con_ae.encode(xx)
+            tgt_latent = img_ae.encode(yy)
+
+            #make condition
+            timesteps = torch.randint(0,DDPM_Scheduler.num_train_timesteps,(tgt_latent.shape[0],),device=default_device,dtype=torch.long)
+            # glide 里面的做法，随机训练有条件和无条件两种情况而不是进行分开训练，对有条件还要单独训练一次。
+            if batch % 2 == 0 :
+                conditions = make_conditions(timesteps,src_latent,embedding_dim = 512)
+            else:
+                conditions = make_conditions(timesteps,None,embedding_dim = 512)
+
+
+
 
 
 
