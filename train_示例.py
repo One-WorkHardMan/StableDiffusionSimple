@@ -19,10 +19,10 @@ import torch.utils.data as tud
 from diffusers.models.embeddings import get_timestep_embedding
 from diffusers.schedulers import DDPMScheduler
 
-from models import AutoEncoderKL
-from models import AutoEncoderVQ
-from models import PatchGANDiscriminator
-from models import ConditionalUNet
+from models_示例 import AutoEncoderKL
+from models_示例 import AutoEncoderVQ
+from models_示例 import PatchGANDiscriminator
+from models_示例 import ConditionalUNet
 
 
 # Fake Dataset, just for demo.
